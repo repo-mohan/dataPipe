@@ -3,19 +3,18 @@
   */
 package org.mohan.spark.sql.etl
 
-import org.apache.spark.sql.Row
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types._
-
 import net.jcazevedo.moultingyaml._
 import net.jcazevedo.moultingyaml.DefaultYamlProtocol._
+
 import scala.io.Source
 
 case class Extract(eSource: String, eType: String, eStgTableName: String)
 
 case class Transform(tSQL: String, tStgTableName: String)
 
-case class Load(lTargetName: String, lStgTableName: String)
+case class Load(lTargetName: String, tStgTableName: String)
 
 case class etlConfig(AppName :String,
                      Extracts: List[Extract],
@@ -36,11 +35,11 @@ object Main {
 
     import spark.implicits._
 
-    ExtractSources(spark, appConfig)
+    val eDfs:List[DataFrame] = ExtractSources(spark, appConfig)
 
     spark.stop()
   }
-
+// This functions read the configuration file and retuns the contents in the form of a case class
   private def fetchEtlConfig(path: String):etlConfig  = {
 
     object MyYamlProtocol extends DefaultYamlProtocol {
@@ -61,22 +60,18 @@ object Main {
     //println(ccYaml.getClass)
     //ccYaml.Extracts.foreach{println}
   }
-  private def ExtractSources(spark: SparkSession , appConfig: etlConfig): Unit = {
-    appConfig.Extracts.foreach{obj_Extract =>
 
-      obj_Extract.eType match {
-        case "JSON" =>
-          val df = spark.read.json(obj_Extract.eSource)
-          df.createOrReplaceGlobalTempView(obj_Extract.eStgTableName)
-          print(obj_Extract.eStgTableName + " counts: " + df.count())
-      }
-    }
-  }
+  private def ExtractSources(spark: SparkSession , appConfig: etlConfig) :List[DataFrame] = {
+      val df :List[DataFrame] = appConfig.Extracts.map(objExtract =>
+        { val tdf = spark.read.json(objExtract.eSource)
+          tdf.createOrReplaceTempView(objExtract.eStgTableName)
+          tdf
+        })
+      //print("The count of data in first data Frame is " + df(0).printSchema())
+      //print("The count of data in second data Frame is " + df(1).printSchema())
+      val sqldf = spark.sql("select * from people_json")
+      sqldf.collect().foreach(println)
 
-  private def TransformSqls(spark: SparkSession, appConfig: etlConfig): Unit = {
-    println("process the sqls")
-  }
-  private def WriteOutput(spark: SparkSession): Unit = {
-    println("writing outputs")
+    df
   }
 }
