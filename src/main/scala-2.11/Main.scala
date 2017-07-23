@@ -34,8 +34,10 @@ object Main {
       .getOrCreate()
 
     import spark.implicits._
-
+    //EXTRACT
     val eDfs:List[DataFrame] = ExtractSources(spark, appConfig)
+    //TRANSFORM and LOAD
+    val tDfs:List[DataFrame] = TransformSQLs(spark, appConfig)
 
     spark.stop()
   }
@@ -62,16 +64,39 @@ object Main {
   }
 
   private def ExtractSources(spark: SparkSession , appConfig: etlConfig) :List[DataFrame] = {
-      val df :List[DataFrame] = appConfig.Extracts.map(objExtract =>
-        { val tdf = spark.read.json(objExtract.eSource)
-          tdf.createOrReplaceTempView(objExtract.eStgTableName)
-          tdf
+      val srcdf :List[DataFrame] = appConfig.Extracts.map(objExtract =>
+        { val sdf = spark.read.json(objExtract.eSource)
+          sdf.createOrReplaceTempView(objExtract.eStgTableName)
+          sdf
         })
       //print("The count of data in first data Frame is " + df(0).printSchema())
       //print("The count of data in second data Frame is " + df(1).printSchema())
       val sqldf = spark.sql("select * from people_json")
+    //debug output
       sqldf.collect().foreach(println)
 
-    df
+    srcdf
+  }
+
+  private def TransformSQLs(spark: SparkSession , appConfig: etlConfig) :List[DataFrame] = {
+    val tsqldf :List[DataFrame] = appConfig.Transforms.map(objTransform =>
+    { val tdf = spark.sql(Source.fromFile(objTransform.tSQL).mkString)
+      tdf.createOrReplaceTempView(objTransform.tStgTableName)
+      //debug output
+      tdf.collect().foreach(println)
+      //Load
+      LoadTargets(objTransform.tStgTableName, tdf, appConfig)
+      tdf
+    })
+    tsqldf
+  }
+
+  private def LoadTargets(LoadTableName:String, LoadDf: DataFrame, appConfig: etlConfig) :Unit = {
+    appConfig.Loads.foreach(objLoad=> {
+      if (objLoad.tStgTableName == LoadTableName)
+        {
+          LoadDf.write.format("csv").save(objLoad.lTargetName)
+        }
+    })
   }
 }
