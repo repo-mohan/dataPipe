@@ -35,9 +35,9 @@ object Main {
 
     import spark.implicits._
     //EXTRACT
-    val eDfs:List[DataFrame] = ExtractSources(spark, appConfig)
+    ExtractSources(spark, appConfig)
     //TRANSFORM and LOAD
-    val tDfs:List[DataFrame] = TransformSQLs(spark, appConfig)
+    TransformSQLs(spark, appConfig)
 
     spark.stop()
   }
@@ -63,40 +63,30 @@ object Main {
     //ccYaml.Extracts.foreach{println}
   }
 
-  private def ExtractSources(spark: SparkSession , appConfig: etlConfig) :List[DataFrame] = {
+  private def ExtractSources(spark: SparkSession , appConfig: etlConfig) :Unit = {
       val srcdf :List[DataFrame] = appConfig.Extracts.map(objExtract =>
         { val sdf = spark.read.json(objExtract.eSource)
           sdf.createOrReplaceTempView(objExtract.eStgTableName)
           sdf
         })
-      //print("The count of data in first data Frame is " + df(0).printSchema())
-      //print("The count of data in second data Frame is " + df(1).printSchema())
-      val sqldf = spark.sql("select * from people_json")
-    //debug output
-      sqldf.collect().foreach(println)
-
-    srcdf
   }
 
-  private def TransformSQLs(spark: SparkSession , appConfig: etlConfig) :List[DataFrame] = {
+  private def TransformSQLs(spark: SparkSession , appConfig: etlConfig) :Unit = {
     val tsqldf :List[DataFrame] = appConfig.Transforms.map(objTransform =>
     { val tdf = spark.sql(Source.fromFile(objTransform.tSQL).mkString)
       tdf.createOrReplaceTempView(objTransform.tStgTableName)
-      //debug output
-      tdf.collect().foreach(println)
-      //Load
-      LoadTargets(objTransform.tStgTableName, tdf, appConfig)
+      //Loads Target Table
+      LoadTargets(spark,tdf,objTransform.tStgTableName,appConfig)
       tdf
     })
     tsqldf
   }
 
-  private def LoadTargets(LoadTableName:String, LoadDf: DataFrame, appConfig: etlConfig) :Unit = {
+  private def LoadTargets(spark: SparkSession,ldf: DataFrame,stgTabName: String, appConfig: etlConfig) :Unit = {
     appConfig.Loads.foreach(objLoad=> {
-      if (objLoad.tStgTableName == LoadTableName)
-        {
-          LoadDf.write.format("csv").save(objLoad.lTargetName)
-        }
+      if (stgTabName == objLoad.tStgTableName) {
+        ldf.coalesce(1).write.format("csv").mode("overwrite").save(objLoad.lTargetName)
+      }
     })
   }
 }
