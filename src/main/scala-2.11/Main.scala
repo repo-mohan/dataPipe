@@ -21,7 +21,7 @@ case class etlConfig(AppName :String,Extracts: List[Extract],Transforms: List[Tr
 
 object Main {
   def main(args: Array[String]): Unit = {
- // what the hell
+ // what the hell is this
     //Disable Info logging
     Logger.getLogger("org").setLevel(Level.OFF)
     Logger.getLogger("akka").setLevel(Level.OFF)
